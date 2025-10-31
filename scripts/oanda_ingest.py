@@ -2,9 +2,10 @@ import requests
 import json
 import os
 import pandas as pd
+import pytz
 from datetime import datetime, timedelta
 
-# === 1. Load credentials from providers.json ===
+# === 1. Load config ===
 config_path = os.path.join(os.path.dirname(__file__), 'providers.json')
 with open(config_path, 'r') as f:
     config = json.load(f)
@@ -13,80 +14,78 @@ oanda_cfg = config['oanda']
 ACCOUNT_ID = oanda_cfg['account_id']
 API_KEY = oanda_cfg['api_key']
 ENV = oanda_cfg['environment']
-SYMBOL = oanda_cfg['symbol']
-GRANULARITY = oanda_cfg['granularity']
+SYMBOLS = oanda_cfg['symbols']
+GRANULARITIES = oanda_cfg['granularities']
 
-# === 2. Set Oanda endpoint ===
 domain = "api-fxpractice.oanda.com" if ENV == "practice" else "api-fxtrade.oanda.com"
-url = f"https://{domain}/v3/instruments/{SYMBOL}/candles"
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
-# === 3. Set raw folder path ===
-project_root = os.path.dirname(os.path.dirname(__file__))  # go up from /scripts
-raw_dir = os.path.join(project_root, 'raw', 'EURUSD')
-os.makedirs(raw_dir, exist_ok=True)
-raw_file = os.path.join(raw_dir, 'EURUSD_M1_ALL.csv')
+# === 2. Helper function ===
+def fetch_candles(symbol, granularity, start_time):
+    params = {
+        "granularity": granularity,
+        "from": start_time,
+        "price": "M",
+        "count": 5000
+    }
+    url = f"https://{domain}/v3/instruments/{symbol}/candles"
+    response = requests.get(url, headers=headers, params=params)
 
-# === 4. Find last timestamp ===
-if os.path.exists(raw_file):
-    df_existing = pd.read_csv(raw_file)
-    df_existing['Datetime'] = pd.to_datetime(df_existing['Datetime']).dt.tz_localize('UTC')
-    last_time = df_existing['Datetime'].max()
-else:
-    df_existing = pd.DataFrame()
-    last_time = datetime.utcnow() - timedelta(days=1)
-# === 5. Fetch new data from Oanda ===
-from_time = last_time.strftime('%Y-%m-%dT%H:%M:%SZ')
-params = {
-    "from": from_time,
-    "granularity": GRANULARITY,
-    "price": "M",
-    "count": 5000
-}
+    if response.status_code != 200:
+        print(f"❌ Failed to fetch {symbol} {granularity}: {response.text}")
+        return pd.DataFrame()
 
-print(f"⏳ Fetching data from {from_time}...")
-response = requests.get(url, headers=headers, params=params)
+    candles = response.json().get("candles", [])
+    data = []
 
-if response.status_code != 200:
-    print(f"❌ Error: {response.status_code} - {response.text}")
-    exit()
+    for c in candles:
+        time = c["time"]
+        o = float(c["mid"]["o"])
+        h = float(c["mid"]["h"])
+        l = float(c["mid"]["l"])
+        cl = float(c["mid"]["c"])
+        vol = int(c["volume"])
+        data.append([time, o, h, l, cl, vol])
 
-data = response.json()
-candles = data.get('candles', [])
-rows = []
-for c in candles:
-    if c['complete']:
-        rows.append([
-            c['time'],
-            float(c['mid']['o']),
-            float(c['mid']['h']),
-            float(c['mid']['l']),
-            float(c['mid']['c']),
-            int(c['volume'])
-        ])
+    df = pd.DataFrame(data, columns=["Datetime", "Open", "High", "Low", "Close", "Volume"])
+    df["Datetime"] = pd.to_datetime(df["Datetime"]).dt.tz_convert("UTC")
+    return df
 
-# === 6. Build DataFrame and rename columns ===
-new_df = pd.DataFrame(rows, columns=['Datetime', 'Open', 'High', 'Low', 'Close', 'Volume'])
-new_df['Datetime'] = pd.to_datetime(new_df['Datetime'])
+# === 3. Set raw data path ===
+project_root = os.path.dirname(os.path.dirname(__file__))
+raw_root = os.path.join(project_root, 'raw')
+os.makedirs(raw_root, exist_ok=True)
 
-# === 7. Merge with existing data ===
-if not df_existing.empty:
-    combined = pd.concat([df_existing, new_df], ignore_index=True)
-    combined = combined.drop_duplicates(subset=['Datetime']).sort_values('Datetime')
-else:
-    combined = new_df
+# === 4. Fetch & save data for all symbols ===
+for symbol in SYMBOLS:
+    for granularity in GRANULARITIES:
+        print(f"📥 Fetching {symbol} ({granularity}) from Oanda...")
 
-# === 8. Save updated file ===
-combined.to_csv(raw_file, index=False)
-print(f"✅ Ingested {len(new_df)} new rows. Total rows: {len(combined)}")
+        raw_dir = os.path.join(raw_root, symbol)
+        os.makedirs(raw_dir, exist_ok=True)
 
-# === 9. Call your pipeline to clean and resample ===
-try:
-    import sys
-    sys.path.append(os.path.join(project_root, 'scripts'))
-    from pipeline import clean_data, resample_data
-    clean_data('EURUSD')
-    resample_data('EURUSD')
-    print("✅ Cleaned and resampled data updated.")
-except Exception as e:
-    print(f"⚠️ Pipeline step skipped: {e}")
+        file_path = os.path.join(raw_dir, f"{symbol}_{granularity}_ALL.csv")
+
+        # Determine start time
+        if os.path.exists(file_path):
+            df_existing = pd.read_csv(file_path)
+            last_time = pd.to_datetime(df_existing["Datetime"]).max().tz_convert("UTC")
+            start_time = (last_time + timedelta(minutes=1)).isoformat()
+        else:
+            start_time = (datetime.now(pytz.UTC) - timedelta(days=30)).isoformat()  # default: 30 days
+
+        # Fetch
+        df_new = fetch_candles(symbol, granularity, start_time)
+        if not df_new.empty:
+            if os.path.exists(file_path):
+                df_existing = pd.read_csv(file_path)
+                df_all = pd.concat([df_existing, df_new]).drop_duplicates(subset="Datetime")
+            else:
+                df_all = df_new
+
+            df_all.to_csv(file_path, index=False)
+            print(f"✅ Updated {file_path} ({len(df_new)} new rows)")
+        else:
+            print(f"⚠️ No new data for {symbol}")
+
+print("🎯 All symbols fetched and saved successfully.")

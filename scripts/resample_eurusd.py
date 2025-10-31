@@ -1,11 +1,14 @@
 import pandas as pd
 
 # ===== SETTINGS =====
-input_file = "EURUSD_M1_ALL.csv"  # your master M1 file
+import os
+
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+input_file = os.path.join(project_root, 'processed', 'EURUSD_M1_ALL_FILTERED.csv')  # your master M1 file
 # ====================
 
 print("⏳ Loading master file (this may take a bit)...")
-df = pd.read_csv(input_file, parse_dates=['Datetime'])
+df = pd.read_csv(input_file, names=["Datetime", "Open", "High", "Low", "Close", "Volume"], header=0, parse_dates=["Datetime"])
 
 # Set Datetime as the index for resampling
 df.set_index('Datetime', inplace=True)
@@ -49,3 +52,6 @@ M1.to_csv('EURUSD_MN1.csv')
 print("✅ EURUSD_MN1.csv saved")
 
 print("🎉✅ All resampled files are ready!")
+
+def resample_all(symbol="EURUSD"):
+    pass  # Placeholder for now

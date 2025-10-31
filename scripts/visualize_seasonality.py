@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
-from pipeline import get_filtered_data
+from scripts.pipeline import get_filtered_data
 
 # ===== SETTINGS =====
 SYMBOL = "EURUSD"
@@ -58,3 +58,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def generate_seasonality_charts():
+    print("📊 Generating charts (placeholder)...")

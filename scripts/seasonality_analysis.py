@@ -37,3 +37,7 @@ monthly = monthly.sort_values(by="Range_Pips_mean", ascending=False)
 os.makedirs("../seasonality", exist_ok=True)
 monthly.to_csv(OUTPUT_FILE)
 print("✅ Seasonality data saved.")
+
+
+def analyze_seasonality():
+    print("📈 Running seasonality analysis (placeholder)...")

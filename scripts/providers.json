@@ -1,9 +1,9 @@
 {
-    "oanda": {
-      "account_id": "101-004-35918806-001",
-      "api_key": "5761fb0888b811aa3ea3ef36f030ed8b-8e96b409aa05abd4233bdaadc30709af",
-      "environment": "practice",
-      "symbol": "EUR_USD",
-      "granularity": "M1"
-    }
+  "oanda": {
+    "account_id": "101-004-35918806-001",
+    "api_key": "5761fb0888b811aa3ea3ef36f030ed8b-8e96b409aa05abd4233bdaadc30709af",
+    "environment": "practice",
+    "symbols": ["EUR_USD", "GBP_USD", "USD_JPY", "USD_CHF", "AUD_USD", "USD_CAD", "NZD_USD"],
+    "granularities": ["M1"]
   }
+}

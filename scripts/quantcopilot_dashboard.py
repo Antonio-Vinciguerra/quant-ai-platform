@@ -1,15 +1,28 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 
 st.set_page_config(page_title="QuantCopilot Dashboard", layout="wide")
 st.title("🧠 QuantCopilot Dashboard")
 
-# === File uploader ===
-uploaded_file = st.file_uploader("Upload a cleaned CSV file", type=["csv"])
-if uploaded_file:
-    df = pd.read_csv(uploaded_file, parse_dates=True, index_col=0)
-    st.success("✅ File loaded!")
+# === Config ===
+data_root = "../processed"
+symbols = sorted([d for d in os.listdir(data_root) if os.path.isdir(os.path.join(data_root, d))])
+timeframes = ["M5", "M15", "M30", "H1", "H4", "D1", "W1", "MN1"]
+
+# === Sidebar: Symbol + Timeframe selector ===
+st.sidebar.header("⚙️ Data Selection")
+selected_symbol = st.sidebar.selectbox("Select symbol", symbols)
+selected_tf = st.sidebar.selectbox("Select timeframe", timeframes)
+
+# === File path ===
+file_path = os.path.join(data_root, selected_symbol, f"{selected_symbol}_{selected_tf}.parquet")
+
+# === Load Data ===
+if os.path.exists(file_path):
+    df = pd.read_parquet(file_path)
+    st.success(f"✅ Loaded {selected_symbol} at {selected_tf}")
 
     # === Preview ===
     st.subheader("📊 Data Preview")
@@ -28,4 +41,4 @@ if uploaded_file:
     else:
         st.info("ℹ️ No 'Range_Pips' column found.")
 else:
-    st.info("⬆️ Upload a CSV file to get started.")
+    st.error(f"❌ File not found: {file_path}")
