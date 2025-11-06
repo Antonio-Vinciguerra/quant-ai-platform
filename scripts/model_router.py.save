@@ -1,0 +1,66 @@
+# model_router.py
+
+import os
+import openai
+import requests
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=os.path.expanduser('~/quant-ai-platform/.env'))
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL_NAME", "gpt-4")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL_NAME", "mistral")
+
+openai.api_key = OPENAI_API_KEY
+
+#def query_ollama(prompt):
+ #   try:
+  #      response = requests.post(
+   #         f"http://localhost:11434/api/generate",
+    #        json={"model": OLLAMA_MODEL, "prompt": prompt},
+     #       timeout=60
+      #  )
+       # response.raise_for_status()
+        #return response.json().get("response", "").strip()
+   # except Exception as e:
+    #    print("⚠️ Ollama failed:", e)
+     #   return None
+
+def query_openai(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model=OPENAI_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return response['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        print("⚠️ OpenAI failed:", e)
+        return None
+
+def query_model(prompt, preferred="ollama"):
+    if preferred == "ollama":
+        print("⚙️ Trying Ollama first...")
+        response = query_ollama(prompt)
+        if response:
+            return f"[🧠 OLLAMA]\n{response}"
+        print("⚙️ Falling back to OpenAI GPT-4...")
+        response = query_openai(prompt)
+        if response:
+            return f"[🧠 GPT-4]\n{response}"
+    else:
+        print("⚙️ Trying OpenAI first...")
+        response = query_openai(prompt)
+        if response:
+            return f"[🧠 GPT-4]\n{response}"
+        print("⚙️ Falling back to Ollama...")
+        response = query_ollama(prompt)
+        if response:
+            return f"[🧠 OLLAMA]\n{response}"
+
+    return "❌ All model attempts failed."
+
+if __name__ == "__main__":
+    prompt = input("🔹 Enter your question: ")
+    answer = query_model(prompt)
+    print("\n✅ Answer:\n", answer)
